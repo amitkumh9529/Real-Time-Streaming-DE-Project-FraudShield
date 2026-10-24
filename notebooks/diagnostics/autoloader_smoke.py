@@ -19,6 +19,7 @@ input_stream=(spark.readStream
 # COMMAND ----------
 
 from pyspark.sql import functions as F
+
 tranformed_df=input_stream.select(
 "*",
 F.col("_metadata.file_path").alias("file_path"),

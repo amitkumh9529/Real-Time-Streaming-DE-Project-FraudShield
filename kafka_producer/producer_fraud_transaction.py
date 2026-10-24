@@ -4,14 +4,13 @@ import json
 import logging
 import random
 import signal
-import time
-
-from confluent_kafka import Producer
 
 from config import load_settings
+from confluent_kafka import Producer
+from contracts import TransactionEvent
 from customer_generator import CustomerGenerator
-from merchant_generator import MerchantGenerator
 from fraud_engine import FraudEngine
+from merchant_generator import MerchantGenerator
 from transaction_generator import TransactionGenerator
 from utils import validate_json_payload
 
@@ -21,9 +20,8 @@ logger = logging.getLogger(__name__)
 
 def _build_payload(txn) -> dict:
     payload = txn.to_dict()
-    payload.pop("fraud_score", None)
-    payload.pop("fraud_reason", None)
-    return payload
+    event = TransactionEvent(**payload)
+    return event.model_dump() if hasattr(event, "model_dump") else event.dict()
 
 
 def _prepare_transaction(txn):

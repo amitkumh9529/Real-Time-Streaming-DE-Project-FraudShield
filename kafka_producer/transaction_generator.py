@@ -1,12 +1,8 @@
 from __future__ import annotations
 
 import random
-from datetime import datetime, timezone
-from typing import Any
 
 import numpy as np
-import pandas as pd
-
 from fraud_engine import FraudEngine
 from models import Customer, Merchant, Transaction
 from utils import generate_id, utc_now_iso

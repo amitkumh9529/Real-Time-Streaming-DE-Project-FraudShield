@@ -49,7 +49,7 @@ VALUES
     'DEV-1001',
     '4532123412345678',
     'Visa',
-    'databeli14@gmail.com',
+    'alerts-demo@example.com',
     100000,
     CURRENT_TIMESTAMP
 ),
@@ -73,7 +73,7 @@ VALUES
     'DEV-1002',
     '5212345678901234',
     'MasterCard',
-    'databeli14@gmail.com',
+    'alerts-demo@example.com',
     100000,
     CURRENT_TIMESTAMP
 );

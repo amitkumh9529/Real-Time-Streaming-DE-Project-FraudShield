@@ -1,8 +1,10 @@
-from pyspark import pipelines as dp
-from pyspark.sql.dataframe import DataFrame
 import json
-from pyspark.sql.functions import col
+
+from pyspark import pipelines as dp
 from pyspark.sql import functions as F
+from pyspark.sql.dataframe import DataFrame
+from pyspark.sql.functions import col
+
 
 @dp.table(
 name="fraudshield.bronze.transactions"

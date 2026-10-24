@@ -1,12 +1,11 @@
 # Databricks notebook source
-# bootstrap_servers='pkc-xrnwx.asia-south2.gcp.confluent.cloud:9092'
-# api_key='5OVF32EJBUO5UHI4'
-# api_secret='cfltbMZTBsGT29a6a7frYaxDiSAWPLD2synlHwqUkmQtbf9P2vttx7qISb+2PMzA'
-# topic='credit_card_transactions'
+# Smoke test validating Confluent Cloud Kafka connectivity and Spark Structured Streaming.
+# Credentials are retrieved securely from 'fraudshield-scope' Databricks Secret Scope.
 
 # COMMAND ----------
 
 import json
+
 kafka_connection_json=dbutils.secrets.get(scope="fraudshield-scope",key="kafka_connection_details")
 kafka_config=json.loads(kafka_connection_json)
 bootstrap_servers=kafka_config['bootstrap_servers']
@@ -41,6 +40,7 @@ display(sample_batch)
 # COMMAND ----------
 
 from pyspark.sql.functions import col
+
 parsed_batch=sample_batch.select(
 col("key").cast("string"),
 col("value").cast("string"),
@@ -74,6 +74,7 @@ streaming_df=(spark.readStream.format("kafka")
 # COMMAND ----------
 
 from pyspark.sql.functions import col
+
 parsed_streaming_df=streaming_df.select(
 col("key").cast("string"),
 col("value").cast("string"),

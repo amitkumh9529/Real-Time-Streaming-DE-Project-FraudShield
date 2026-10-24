@@ -22,9 +22,11 @@ parts/
 sdist/
 var/
 wheels/
-*.egg-info/
-.installed.cfg
-*.egg
+# Testing & Linting
+.pytest_cache/
+.ruff_cache/
+*.log
+
 
 # Virtual Environments
 .venv/

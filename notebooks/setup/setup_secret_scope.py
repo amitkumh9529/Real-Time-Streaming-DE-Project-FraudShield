@@ -1,75 +1,61 @@
 # Databricks notebook source
-# =====================================================
-# 1️⃣ Define Connection Variables (EDIT THESE)
-# =====================================================
+# ==============================================================================
+# FraudShield Secret Scope Setup & Secure Credential Provisioning
+#
+# Securely provisions the `fraudshield-scope` Databricks Secret Scope using
+# Databricks REST API. Credentials must be passed as environment variables or
+# Databricks widgets, NEVER hardcoded in the script.
+# ==============================================================================
 
-# Secret scope name (will be created if not exists)
-secret_scope_name = "fraudshield-scope"
-
-# COMMAND ----------
-
-# Python cell in the same workspace notebook
-ctx = dbutils.notebook.entry_point.getDbutils().notebook().getContext()
-
-api_url  = ctx.apiUrl().getOrElse(None)     # e.g. https://adb-...azuredatabricks.net
-api_token = ctx.apiToken().getOrElse(None)  # personal access token for this session
-
-print(api_url)
-print(api_token)  # handle securely, do not log in real code
-
+import json
+import os
 
 import requests
-import json
-
-# ----------------------------------------
-# Configuration
-# ----------------------------------------
-DATABRICKS_INSTANCE = api_url  # Replace with your workspace URL
-DATABRICKS_TOKEN = api_token  # Replace with your PAT
-
-scope_name = secret_scope_name  # Scope to be created
-backend_type = "DATABRICKS"     # Use "AZURE_KEYVAULT" if integrating with Key Vault
 
 # COMMAND ----------
+# 1. Workspace Context & API Configuration
 
+ctx = dbutils.notebook.entry_point.getDbutils().notebook().getContext()
+api_url = ctx.apiUrl().getOrElse(None)
+api_token = ctx.apiToken().getOrElse(None)
 
+DATABRICKS_INSTANCE = api_url
+DATABRICKS_TOKEN = api_token
 
-# ----------------------------------------
-# API Endpoint
-# ----------------------------------------
-url = f"{DATABRICKS_INSTANCE}/api/2.0/secrets/scopes/create"
+secret_scope_name = os.getenv("SECRET_SCOPE_NAME", "fraudshield-scope")
+
+# COMMAND ----------
+# 2. Create Secret Scope (if not existing)
 
 headers = {
     "Authorization": f"Bearer {DATABRICKS_TOKEN}",
     "Content-Type": "application/json"
 }
 
-payload = {
-    "scope": scope_name
-}
+create_scope_url = f"{DATABRICKS_INSTANCE}/api/2.0/secrets/scopes/create"
+payload = {"scope": secret_scope_name}
 
-# ----------------------------------------
-# Send request
-# ----------------------------------------
-response = requests.post(url, headers=headers, data=json.dumps(payload))
-
-# ----------------------------------------
-# Handle response
-# ----------------------------------------
+response = requests.post(create_scope_url, headers=headers, json=payload)
 if response.status_code == 200:
-    print(f"Secret scope '{scope_name}' created successfully.")
+    print(f"✅ Secret scope '{secret_scope_name}' created successfully.")
+elif response.status_code == 400 and "RESOURCE_ALREADY_EXISTS" in response.text:
+    print(f"ℹ️ Secret scope '{secret_scope_name}' already exists. Proceeding.")
 else:
-    print("Failed to create secret scope.")
-    print("Status Code:", response.status_code)
-    print("Response:", response.text)
-
+    print(f"⚠️ Notice: Scope creation returned status {response.status_code}")
 
 # COMMAND ----------
+# 3. Securely Provision Kafka Connection Details
+# Credentials must be set in your execution environment:
+#   KAFKA_BOOTSTRAP_SERVERS, KAFKA_TOPIC, KAFKA_API_KEY, KAFKA_API_SECRET
 
-kafka_bootstrap_servers = 'pkc-xrnwx.asia-south2.gcp.confluent.cloud:9092'
-kafka_topic = 'credit_card_transactions'
-kafka_api_key = '5OVF32EJBUO5UHI4'
-kafka_api_secret = 'cfltbMZTBsGT29a6a7frYaxDiSAWPLD2synlHwqUkmQtbf9P2vttx7qISb+2PMzA'
+kafka_bootstrap_servers = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "pkc-sample.asia-south2.gcp.confluent.cloud:9092")
+kafka_topic = os.getenv("KAFKA_TOPIC", "credit_card_transactions")
+kafka_api_key = os.getenv("KAFKA_API_KEY", "")
+kafka_api_secret = os.getenv("KAFKA_API_SECRET", "")
+
+if not kafka_api_key or not kafka_api_secret:
+    print("⚠️ KAFKA_API_KEY or KAFKA_API_SECRET environment variables not set.")
+    print("   Please configure them before running this in production.")
 
 kafka_connection_details = json.dumps({
     "bootstrap_servers": kafka_bootstrap_servers,
@@ -78,110 +64,50 @@ kafka_connection_details = json.dumps({
     "api_secret": kafka_api_secret
 })
 
-# COMMAND ----------
+put_secret_url = f"{DATABRICKS_INSTANCE}/api/2.0/secrets/put"
 
-print(kafka_connection_details)
-
-# COMMAND ----------
-
-import requests
-import json
-
-scope = secret_scope_name          # Already existing scope
-secret_key='kafka_connection_details'
-secret_value=kafka_connection_details
-
-# -------------------------------------------------
-# API Endpoint
-# -------------------------------------------------
-url = f"{DATABRICKS_INSTANCE}/api/2.0/secrets/put"
-
-headers = {
-    "Authorization": f"Bearer {DATABRICKS_TOKEN}",
-    "Content-Type": "application/json"
+put_payload = {
+    "scope": secret_scope_name,
+    "key": "kafka_connection_details",
+    "string_value": kafka_connection_details
 }
 
-payload = {
-    "scope": scope,
-    "key": secret_key,
-    "string_value": secret_value
-}
-
-# -------------------------------------------------
-# Send Request
-# -------------------------------------------------
-response = requests.post(url, headers=headers, data=json.dumps(payload))
-
-# -------------------------------------------------
-# Output
-# -------------------------------------------------
-if response.status_code == 200:
-    print(f"Secret '{secret_key}' created successfully in scope '{scope}'.")
+resp_kafka = requests.post(put_secret_url, headers=headers, json=put_payload)
+if resp_kafka.status_code == 200:
+    print(f"✅ Secret 'kafka_connection_details' stored securely in scope '{secret_scope_name}'.")
 else:
-    print("Failed to create secret.")
-    print("Status:", response.status_code)
-    print("Response:", response.text)
-
+    print(f"❌ Failed to store kafka credentials (Status: {resp_kafka.status_code})")
 
 # COMMAND ----------
+# 4. Securely Provision Notification SMTP Credentials
+# Set GMAIL_APP_PASSWORD in environment or prompt securely:
 
-# =====================================================
-# 5️⃣ Verify Secret Retrieval
-# =====================================================
+gmail_app_password = os.getenv("GMAIL_APP_PASSWORD", "")
+gmail_from_email = os.getenv("ALERT_EMAIL_FROM", "alerts@example.com")
+
+if gmail_app_password:
+    put_pwd_payload = {
+        "scope": secret_scope_name,
+        "key": "gmail_api_key",
+        "string_value": gmail_app_password
+    }
+    resp_pwd = requests.post(put_secret_url, headers=headers, json=put_pwd_payload)
+    if resp_pwd.status_code == 200:
+        print(f"✅ Secret 'gmail_api_key' stored securely in scope '{secret_scope_name}'.")
+else:
+    print("ℹ️ GMAIL_APP_PASSWORD not set in environment. Skipping SMTP secret provisioning.")
+
+# COMMAND ----------
+# 5. Verify Secret Retrieval Without Exposing Values
 
 try:
     retrieved_json = dbutils.secrets.get(
         scope=secret_scope_name,
-        key='kafka_connection_details'
+        key="kafka_connection_details"
     )
-    
-    print("Secret retrieved successfully.")
-    
     parsed = json.loads(retrieved_json)
-    print("Parsed JSON:")
-    print(parsed)
-    
+    # Mask API key before logging
+    masked_key = parsed.get("api_key", "")[:4] + "****" if parsed.get("api_key") else "UNSET"
+    print(f"✅ Verified retrieval: Topic '{parsed.get('topic')}', Server '{parsed.get('bootstrap_servers')}', API Key: '{masked_key}'")
 except Exception as e:
-    print("Secret verification failed:")
-    print(str(e))
-
-
-# COMMAND ----------
-
-import requests
-import json
-
-scope = secret_scope_name          # Already existing scope
-secret_key = 'gmail_api_key'       # Name of the secret entry
-secret_value = 'lkls hreo ltin dqwz' # Value to store securely
-
-# -------------------------------------------------
-# API Endpoint
-# -------------------------------------------------
-url = f"{DATABRICKS_INSTANCE}/api/2.0/secrets/put"
-
-headers = {
-    "Authorization": f"Bearer {DATABRICKS_TOKEN}",
-    "Content-Type": "application/json"
-}
-
-payload = {
-    "scope": scope,
-    "key": secret_key,
-    "string_value": secret_value
-}
-
-# -------------------------------------------------
-# Send Request
-# -------------------------------------------------
-response = requests.post(url, headers=headers, data=json.dumps(payload))
-
-# -------------------------------------------------
-# Output
-# -------------------------------------------------
-if response.status_code == 200:
-    print(f"Secret '{secret_key}' created successfully in scope '{scope}'.")
-else:
-    print("Failed to create secret.")
-    print("Status:", response.status_code)
-    print("Response:", response.text)
+    print(f"❌ Secret verification failed: {e}")

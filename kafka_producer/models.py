@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict
-from datetime import datetime
+from dataclasses import asdict, dataclass
 from typing import Any
 
 
@@ -64,11 +63,14 @@ class Transaction:
     is_international: bool
     fraud_score: int
     fraud_reason: str
+    event_id: str = ""
     status: str = "APPROVED"
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
         data["amount"] = round(data["amount"], 2)
+        if not data.get("event_id"):
+            data["event_id"] = f"EVT-{data['transaction_id']}"
         return data
 
 

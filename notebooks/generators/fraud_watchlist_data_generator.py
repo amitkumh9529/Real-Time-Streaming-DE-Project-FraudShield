@@ -1,10 +1,11 @@
 # Databricks notebook source
 # DBTITLE 1,Generate fraud watchlist JSON files from CSV
-import pandas as pd
 import json
+import os
 import time
 from datetime import datetime
-import os
+
+import pandas as pd
 
 # Read the CSV file from the same directory or Databricks workspace fallback
 current_dir = os.path.dirname(os.path.abspath(__file__)) if "__file__" in locals() else "."
@@ -30,7 +31,7 @@ try:
     if existing_files:
         print(f"Found {len(existing_files)} existing files in {output_path}")
         print("Scanning for latest watchlist_id...")
-        
+
         max_id_num = 0
         for file_info in existing_files:
             if file_info.name.endswith('.json'):
@@ -45,9 +46,9 @@ try:
                         if id_num > max_id_num:
                             max_id_num = id_num
                             latest_watchlist_id = watchlist_id
-                except Exception as e:
+                except Exception:
                     continue
-        
+
         if latest_watchlist_id:
             print(f"Latest watchlist_id found: {latest_watchlist_id} (numeric: {max_id_num})")
             # Filter dataframe to start from next record using numeric comparison
@@ -74,30 +75,30 @@ else:
     for index, row in df.iterrows():
         # Convert row to dictionary (column name as key, column value as value)
         row_dict = row.to_dict()
-        
+
         # Ensure entity_id is a string in the dictionary
         row_dict['entity_id'] = str(row_dict['entity_id'])
-        
+
         # Print the entire row being written
         print(f"Entire row being written: {row_dict}")
-        
+
         # Create a unique filename with timestamp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         filename = f"fraud_watchlist_{timestamp}_{index}.json"
         file_path = f"{output_path}/{filename}"
-        
+
         # Write JSON to file using dbutils.fs (required for Unity Catalog volumes)
         # Single-line JSON format
         json_content = json.dumps(row_dict)
         dbutils.fs.put(file_path, json_content, overwrite=True)
-        
+
         print(f"Row {index + 1}/{len(df)}: Written {filename}")
         print(f"  Watchlist ID: {row_dict.get('watchlist_id')}")
-        
+
         # Wait 5 seconds before processing next row (except for the last one)
         if index < len(df) - 1:
-            print(f"  Waiting 5 seconds...\n")
+            print("  Waiting 5 seconds...\n")
             time.sleep(5)
-    
+
     print("\n" + "="*60)
     print(f"\nCompleted! Generated {len(df)} JSON files in {output_path}")

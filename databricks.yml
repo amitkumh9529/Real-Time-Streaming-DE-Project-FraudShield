@@ -1,0 +1,111 @@
+# ==============================================================================
+# Databricks Asset Bundle (DAB) Specification for FraudShield
+# Defines Infrastructure-as-Code for pipelines, workflows, schemas, and alerts.
+# ==============================================================================
+
+bundle:
+  name: fraudshield
+
+include:
+  - resources/*.yml
+
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      host: https://your-dev-workspace.cloud.databricks.com
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      catalog: fraudshield_dev
+      schema: default
+      volume_path: /Volumes/fraudshield_dev/source
+      pipeline_continuous: false
+      worker_nodes: 1
+
+  prod:
+    mode: production
+    workspace:
+      host: https://your-prod-workspace.cloud.databricks.com
+      root_path: /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      catalog: fraudshield
+      schema: default
+      volume_path: /Volumes/fraudshield/source
+      pipeline_continuous: true
+      worker_nodes: 3
+
+variables:
+  catalog:
+    description: Target Unity Catalog name
+    default: fraudshield
+  schema:
+    description: Target Schema name
+    default: default
+  volume_path:
+    description: Unity Catalog Volume root path for data drops
+    default: /Volumes/fraudshield/source
+  pipeline_continuous:
+    description: Whether DLT pipeline runs continuously or in triggered micro-batches
+    default: true
+  worker_nodes:
+    description: Number of compute worker nodes allocated to the pipeline
+    default: 2
+
+resources:
+  pipelines:
+    fraudshield_pipeline:
+      name: "[${bundle.target}] FraudShield Real-Time Lakehouse"
+      target: ${var.schema}
+      catalog: ${var.catalog}
+      continuous: ${var.pipeline_continuous}
+      channel: CURRENT
+      libraries:
+        - notebook:
+            path: ./dlt_pipelines/bronze/transactions_bronze.py
+        - notebook:
+            path: ./dlt_pipelines/bronze/fraud_watchlist_bronze.py
+        - notebook:
+            path: ./dlt_pipelines/bronze/customers_bronze.py
+        - notebook:
+            path: ./dlt_pipelines/silver/transactions_silver.py
+        - notebook:
+            path: ./dlt_pipelines/silver/fraud_watchlist_silver.py
+        - notebook:
+            path: ./dlt_pipelines/silver/customers_silver.py
+        - notebook:
+            path: ./dlt_pipelines/gold/fraud_card_alert.py
+        - notebook:
+            path: ./dlt_pipelines/gold/high_value_transactions_alert.py
+        - notebook:
+            path: ./dlt_pipelines/gold/alert_outbox.py
+        - notebook:
+            path: ./dlt_pipelines/gold/transaction_count_by_minute.py
+        - notebook:
+            path: ./dlt_pipelines/gold/transaction_count_by_minute_sliding_window.py
+        - notebook:
+            path: ./dlt_pipelines/alerts/fraud_card_alert_email_notifier.py
+        - notebook:
+            path: ./dlt_pipelines/alerts/high_value_transaction_email_notifier.py
+      clusters:
+        - label: default
+          autoscale:
+            min_workers: 1
+            max_workers: ${var.worker_nodes}
+          node_type_id: Standard_D4s_v5
+          driver_node_type_id: Standard_D4s_v5
+
+  jobs:
+    fraudshield_alert_dispatcher_job:
+      name: "[${bundle.target}] FraudShield Alert Outbox Dispatcher"
+      schedule:
+        quartz_cron_expression: "0 */1 * * * ?"
+        timezone_id: UTC
+      tasks:
+        - task_key: dispatch_pending_alerts
+          spark_python_task:
+            python_file: ./services/alert_dispatcher.py
+          new_cluster:
+            spark_version: 14.3.x-scala2.12
+            node_type_id: Standard_D4s_v5
+            num_workers: 1

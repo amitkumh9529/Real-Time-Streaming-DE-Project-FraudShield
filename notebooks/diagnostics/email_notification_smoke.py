@@ -39,16 +39,16 @@ gmail_api_key = dbutils.secrets.get(
 
 # COMMAND ----------
 
+import os
 import smtplib
-from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
-# Gmail account
-EMAIL = "youremail@gmail.com"
+# Sender and receiver retrieved safely from environment / secrets
+EMAIL = os.getenv("ALERT_EMAIL_FROM", "alerts@example.com")
 APP_PASSWORD = gmail_api_key
 
-# Receiver
-to_email = "youremail@gmail.com"
+to_email = os.getenv("ALERT_EMAIL_TO", "test-receiver@example.com")
 
 # Create message
 msg = MIMEMultipart()

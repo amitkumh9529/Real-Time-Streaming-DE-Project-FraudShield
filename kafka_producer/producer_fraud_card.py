@@ -4,29 +4,27 @@ import json
 import logging
 import random
 import signal
-import time
-
-from confluent_kafka import Producer
 
 from config import load_settings
+from confluent_kafka import Producer
+from contracts import TransactionEvent
 from customer_generator import CustomerGenerator
-from merchant_generator import MerchantGenerator
 from fraud_engine import FraudEngine
+from merchant_generator import MerchantGenerator
 from transaction_generator import TransactionGenerator
 from utils import validate_json_payload
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-## Update card number to a specific value for testing purposes
+## Specific known watchlist test card number
 CARD_NUMBER = "5008514036965665"
 
 
 def _build_payload(txn) -> dict:
     payload = txn.to_dict()
-    payload.pop("fraud_score", None)
-    payload.pop("fraud_reason", None)
-    return payload
+    event = TransactionEvent(**payload)
+    return event.model_dump() if hasattr(event, "model_dump") else event.dict()
 
 
 def _prepare_transaction(txn):
